@@ -94,6 +94,7 @@ class Database:
         except KeyError:
             engine = create_engine(dsn)
             Database.engines[dsn] = engine
+        self._sql = []
         self._conn = engine.connect()
         try:
             self._meta = MetaData(bind=self._conn)
@@ -129,8 +130,22 @@ class Database:
 
     def close(self):
         if self._conn is not None:
+            self.flush()
             self._conn.close()
             self._conn = None
+
+    def _queue(self, stmt, params):
+        self._sql.append((stmt, params))
+        if len(self._sql) >= 1000:
+            self.flush()
+
+    def flush(self):
+        try:
+            with self._conn.begin():
+                for stmt, params in self._sql:
+                    self._conn.execute(stmt, params)
+        finally:
+            self._sql = []
 
     def add_new_package(self, package, skip=''):
         """
@@ -219,90 +234,85 @@ class Database:
         Log a download in the database, including data derived from JSON in
         pip's user-agent.
         """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
-                (
-                    sanitize(download.filename),
-                    download.host,
-                    download.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(download.arch),
-                    sanitize(download.distro_name),
-                    sanitize(download.distro_version),
-                    sanitize(download.os_name),
-                    sanitize(download.os_version),
-                    sanitize(download.py_name),
-                    sanitize(download.py_version),
-                    sanitize(download.installer_name),
-                    sanitize(download.installer_version),
-                    sanitize(download.setuptools_version),
-                ))
+        self._queue(
+            "VALUES (log_download(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+            (
+                sanitize(download.filename),
+                download.host,
+                download.timestamp.astimezone(UTC).replace(tzinfo=None),
+                sanitize(download.arch),
+                sanitize(download.distro_name),
+                sanitize(download.distro_version),
+                sanitize(download.os_name),
+                sanitize(download.os_version),
+                sanitize(download.py_name),
+                sanitize(download.py_version),
+                sanitize(download.installer_name),
+                sanitize(download.installer_version),
+                sanitize(download.setuptools_version),
+            ))
 
     def log_search(self, search):
         """
         Log a search in the database, including data derived from JSON in
         pip's user-agent.
         """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
-                (
-                    sanitize(search.package),
-                    search.host,
-                    search.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(search.arch),
-                    sanitize(search.distro_name),
-                    sanitize(search.distro_version),
-                    sanitize(search.os_name),
-                    sanitize(search.os_version),
-                    sanitize(search.py_name),
-                    sanitize(search.py_version),
-                    sanitize(search.installer_name),
-                    sanitize(search.installer_version),
-                    sanitize(search.setuptools_version),
-                ))
+        self._queue(
+            "VALUES (log_search(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s))",
+            (
+                sanitize(search.package),
+                search.host,
+                search.timestamp.astimezone(UTC).replace(tzinfo=None),
+                sanitize(search.arch),
+                sanitize(search.distro_name),
+                sanitize(search.distro_version),
+                sanitize(search.os_name),
+                sanitize(search.os_version),
+                sanitize(search.py_name),
+                sanitize(search.py_version),
+                sanitize(search.installer_name),
+                sanitize(search.installer_version),
+                sanitize(search.setuptools_version),
+            ))
 
     def log_project(self, project):
         """
         Log a project page hit in the database.
         """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_project(%s, %s, %s, %s))",
-                (
-                    sanitize(project.package),
-                    project.host,
-                    project.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(project.user_agent),
-                ))
+        self._queue(
+            "VALUES (log_project(%s, %s, %s, %s))",
+            (
+                sanitize(project.package),
+                project.host,
+                project.timestamp.astimezone(UTC).replace(tzinfo=None),
+                sanitize(project.user_agent),
+            ))
 
     def log_json(self, json):
         """
         Log a project's JSON page hit in the database.
         """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_json(%s, %s, %s, %s))",
-                (
-                    sanitize(json.package),
-                    json.host,
-                    json.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(json.user_agent),
-                ))
+        self._queue(
+            "VALUES (log_json(%s, %s, %s, %s))",
+            (
+                sanitize(json.package),
+                json.host,
+                json.timestamp.astimezone(UTC).replace(tzinfo=None),
+                sanitize(json.user_agent),
+            ))
 
     def log_page(self, page):
         """
         Log a web page hit in the database.
         """
-        with self._conn.begin():
-            self._conn.execute(
-                "VALUES (log_page(%s, %s, %s, %s))",
-                (
-                    sanitize(page.page),
-                    page.host,
-                    page.timestamp.astimezone(UTC).replace(tzinfo=None),
-                    sanitize(page.user_agent),
-                ))
+        self._queue(
+            "VALUES (log_page(%s, %s, %s, %s))",
+            (
+                sanitize(page.page),
+                page.host,
+                page.timestamp.astimezone(UTC).replace(tzinfo=None),
+                sanitize(page.user_agent),
+            ))
 
     def log_build(self, build):
         """
