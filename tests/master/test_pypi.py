@@ -186,6 +186,28 @@ def test_pypi_remove_package():
         ]
 
 
+def test_pypi_yank_version():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = [
+            ('foo', '0.1', 1531327388, 'yank release', 0),
+        ]
+        events = PyPIEvents()
+        assert list(events) == [
+            ('foo', '0.1',  dt('2018-07-11 16:43:08'), 'yank'),
+        ]
+
+
+def test_pypi_unyank_version():
+    with mock.patch('xmlrpc.client.ServerProxy') as proxy:
+        proxy().changelog_since_serial.return_value = [
+            ('foo', '0.1', 1531327388, 'unyank release', 0),
+        ]
+        events = PyPIEvents()
+        assert list(events) == [
+            ('foo', '0.1',  dt('2018-07-11 16:43:08'), 'unyank'),
+        ]
+
+
 def test_pypi_backoff():
     with mock.patch('xmlrpc.client.ServerProxy') as proxy:
         proxy().changelog_since_serial.return_value = [
